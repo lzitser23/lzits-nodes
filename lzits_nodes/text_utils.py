@@ -82,21 +82,20 @@ class SimpleTextPrepender:
     
     
 class IndexPicker:
-    
-   # Picks a single item from a list of strings by index.
+    """
+    Picks a single item from a list of strings by index.
 
-   # Designed to be used after a node like your String Splitter that has
-   # OUTPUT_IS_LIST = (True,) on a STRING output.
-
-   # If `items` is:
-   #   - a list: we index into it
-   #   - a single string: we just pass it through 
-    
+    Use it after your String Splitter (Batch), which returns a STRING with
+    OUTPUT_IS_LIST = (True,). Because this node sets INPUT_IS_LIST = True,
+    Comfy will pass the *entire* list of prompts into `items` in one call,
+    instead of running the node once per element.
+    """
 
     CATEGORY = "lzits nodes"
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("item",)
     FUNCTION = "run"
+    INPUT_IS_LIST = True  
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -105,7 +104,7 @@ class IndexPicker:
                 "items": (
                     "STRING",
                     {
-                        "forceInput": True,  # must come from another node
+                        "forceInput": True,  # connect from String Splitter output
                     },
                 ),
                 "index": (
@@ -121,27 +120,18 @@ class IndexPicker:
         }
 
     def run(self, items, index):
-        # Ensure index is an int
+        # Here, `items` is guaranteed to be a *list* of strings.
+        if not items:
+            return ("",)
+
         try:
             index = int(index)
         except Exception:
             index = 0
 
-        # CASE 1: items is actually a list (what we want)
-        if isinstance(items, list):
-            if not items:
-                return ("",)
+        if index < 0:
+            index = 0
+        if index >= len(items):
+            index = len(items) - 1
 
-            if index < 0:
-                index = 0
-            if index >= len(items):
-                index = len(items) - 1
-
-            return (items[index],)
-
-        # CASE 2: items is a single string (because Comfy unrolled the batch)
-        # Just pass it through; don't index characters.
-        if not items:
-            return ("",)
-
-        return (items,)
+        return (items[index],)
