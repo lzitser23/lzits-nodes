@@ -6,9 +6,9 @@ license = { file = "LICENSE" }
 dependencies = []
 
 [project.urls]
-Repository = "https://github.com/OWNER/REPO"  # TODO: Replace with your actual GitHub repository URL
+Repository = "https://github.com/lzitser23/lzits-nodes"  
 
 [tool.comfy]
-PublisherId = ""  # TODO: Fill in your Publisher ID from Comfy Registry
+PublisherId = "lzitser"  
 DisplayName = "LZITS Nodes"
-Icon = ""
+Icon = "" # add later if i want
