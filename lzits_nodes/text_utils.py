@@ -81,28 +81,17 @@ class SimpleTextPrepender:
         return (result,)
     
     
-class IndexPicker:
-    
+class IndexPicker:    
     # Picks a single item from a list of strings by index.
-
-    # If `items` is:
-    # - a list: we index into it
-    # - a single string: we just pass it through
+    # Useful after a splitter node that outputs a STRING list.
     
-
-    CATEGORY = "lzits nodes"
-    RETURN_TYPES = ("STRING",)
-    RETURN_NAMES = ("item",)
-    FUNCTION = "run"
 
     @classmethod
-    def INPUT_TYPES(cls):
+    def INPUT_TYPES(s):
         return {
             "required": {
-                # We want this to accept the WHOLE list from a batched output.
-
                 "items": ("STRING", {
-                    "forceInput": True,
+                    "forceInput": True,   # expects input from another node (list-capable)
                 }),
                 "index": ("INT", {
                     "default": 0,
@@ -113,25 +102,23 @@ class IndexPicker:
             }
         }
 
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("item",)
+    FUNCTION = "run"
+    CATEGORY = "lzits nodes"
+
     def run(self, items, index):
-        # make sure index is int
-        try:
-            index = int(index)
-        except Exception:
+       
+        # items: list of strings (from a node with OUTPUT_IS_LIST=True)
+        # index: which item to pick (0-based)
+        
+        
+        if not items:
+            return ("",)
+
+        if index < 0:
             index = 0
+        if index >= len(items):
+            index = len(items) - 1
 
-        # CASE 1: we truly got a list (what we want)
-        if isinstance(items, list):
-            if not items:
-                return ("",)
-
-            if index < 0:
-                index = 0
-            if index >= len(items):
-                index = len(items) - 1
-
-            return (items[index],)
-
-        # CASE 2: items is actually a single string (because Comfy unrolled the batch)
-        # In that case, just pass it through so you don't end up indexing characters.
-        return (items,)
+        return (items[index],)
