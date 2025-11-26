@@ -87,7 +87,7 @@ class IndexPicker:
 
     # If `items` is:
     # - a list: we index into it
-    # - a single string: we just pass it through (no crash)
+    # - a single string: we just pass it through
     
 
     CATEGORY = "lzits nodes"
