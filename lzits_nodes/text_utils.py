@@ -81,44 +81,67 @@ class SimpleTextPrepender:
         return (result,)
     
     
-class IndexPicker:    
-    # Picks a single item from a list of strings by index.
-    # Useful after a splitter node that outputs a STRING list.
+class IndexPicker:
+    
+   # Picks a single item from a list of strings by index.
+
+   # Designed to be used after a node like your String Splitter that has
+   # OUTPUT_IS_LIST = (True,) on a STRING output.
+
+   # If `items` is:
+   #   - a list: we index into it
+   #   - a single string: we just pass it through 
     
 
-    @classmethod
-    def INPUT_TYPES(s):
-        return {
-            "required": {
-                "items": ("STRING", {
-                    "forceInput": True,   # expects input from another node (list-capable)
-                }),
-                "index": ("INT", {
-                    "default": 0,
-                    "min": 0,
-                    "max": 999,
-                    "step": 1
-                }),
-            }
-        }
-
+    CATEGORY = "lzits nodes"
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("item",)
     FUNCTION = "run"
-    CATEGORY = "lzits nodes"
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "items": (
+                    "STRING",
+                    {
+                        "forceInput": True,  # must come from another node
+                    },
+                ),
+                "index": (
+                    "INT",
+                    {
+                        "default": 0,
+                        "min": 0,
+                        "max": 999,
+                        "step": 1,
+                    },
+                ),
+            }
+        }
 
     def run(self, items, index):
-       
-        # items: list of strings (from a node with OUTPUT_IS_LIST=True)
-        # index: which item to pick (0-based)
-        
-        
+        # Ensure index is an int
+        try:
+            index = int(index)
+        except Exception:
+            index = 0
+
+        # CASE 1: items is actually a list (what we want)
+        if isinstance(items, list):
+            if not items:
+                return ("",)
+
+            if index < 0:
+                index = 0
+            if index >= len(items):
+                index = len(items) - 1
+
+            return (items[index],)
+
+        # CASE 2: items is a single string (because Comfy unrolled the batch)
+        # Just pass it through; don't index characters.
         if not items:
             return ("",)
 
-        if index < 0:
-            index = 0
-        if index >= len(items):
-            index = len(items) - 1
-
-        return (items[index],)
+        return (items,)
