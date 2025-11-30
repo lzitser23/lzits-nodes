@@ -124,6 +124,10 @@ class IndexPicker:
         if not items:
             return ("",)
 
+        # INPUT_IS_LIST = True affects ALL inputs, so index arrives as a list too
+        if isinstance(index, list):
+            index = index[0] if index else 0
+
         try:
             index = int(index)
         except Exception:
