@@ -125,17 +125,19 @@ class IndexPicker:
             return ("",)
 
         # INPUT_IS_LIST = True affects ALL inputs, so index arrives as a list too
-        if isinstance(index, list):
-            index = index[0] if index else 0
+        # Handle nested lists and single values
+        while isinstance(index, (list, tuple)) and len(index) > 0:
+            index = index[0]
+        
+        if isinstance(index, (list, tuple)):
+            index = 0
 
         try:
             index = int(index)
-        except Exception:
+        except (TypeError, ValueError):
             index = 0
 
-        if index < 0:
-            index = 0
-        if index >= len(items):
-            index = len(items) - 1
+        # Clamp index to valid range
+        index = max(0, min(index, len(items) - 1))
 
         return (items[index],)
