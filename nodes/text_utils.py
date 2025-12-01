@@ -120,12 +120,19 @@ class IndexPicker:
         }
 
     def run(self, items, index):
+        # DEBUG: Log what we receive
+        print(f"[IndexPicker DEBUG] items type: {type(items).__name__}, len: {len(items) if isinstance(items, (list, tuple)) else 'N/A'}")
+        print(f"[IndexPicker DEBUG] items value: {items}")
+        print(f"[IndexPicker DEBUG] index type: {type(index).__name__}, value: {index}")
+        
         # Here, `items` is guaranteed to be a *list* of strings.
         if not items:
+            print("[IndexPicker DEBUG] items is empty, returning empty string")
             return ("",)
 
         # INPUT_IS_LIST = True affects ALL inputs, so index arrives as a list too
         # Handle nested lists and single values
+        original_index = index
         while isinstance(index, (list, tuple)) and len(index) > 0:
             index = index[0]
         
@@ -135,9 +142,17 @@ class IndexPicker:
         try:
             index = int(index)
         except (TypeError, ValueError):
+            print(f"[IndexPicker DEBUG] Failed to convert index to int, defaulting to 0")
             index = 0
 
-        # Clamp index to valid range
-        index = max(0, min(index, len(items) - 1))
+        print(f"[IndexPicker DEBUG] Index after unwrapping: {original_index} -> {index}")
 
-        return (items[index],)
+        # Clamp index to valid range
+        clamped_index = max(0, min(index, len(items) - 1))
+        if clamped_index != index:
+            print(f"[IndexPicker DEBUG] Index clamped: {index} -> {clamped_index}")
+        index = clamped_index
+
+        result = items[index]
+        print(f"[IndexPicker DEBUG] Returning items[{index}] = '{result}'")
+        return (result,)
