@@ -3,7 +3,7 @@
 
 import folder_paths
 import comfy.utils
-import comfy.lora
+import comfy.sd
 
 
 class LoRASelectorMulti:
@@ -59,7 +59,7 @@ class LoRASelectorMulti:
             else:
                 # Apply LoRA to model only (no CLIP)
                 # load_lora_for_models returns (model_lora, clip_lora)
-                model_lora, _ = comfy.lora.load_lora_for_models(model, None, lora, strength, 0)
+                model_lora, _ = comfy.sd.load_lora_for_models(model, None, lora, strength, 0)
                 output_models.append(model_lora)
         
         return tuple(output_models)
