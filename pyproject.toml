@@ -1,7 +1,7 @@
 [project]
 name = "lzits-nodes"
-description = "ComfyUI custom nodes for text/string manipulation including splitting strings into batches, appending/prepending text, and picking items from lists by index."
-version = "1.0.16"
+description = "ComfyUI custom nodes for text/string manipulation including splitting strings into batches, appending/prepending text, picking items from lists by index, and multi-output LoRA selection."
+version = "1.0.17"
 license = { file = "LICENSE" }
 dependencies = []
 
