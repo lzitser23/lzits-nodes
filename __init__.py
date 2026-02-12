@@ -3,6 +3,7 @@
 # 1. Import the new classes
 from .nodes.text_utils import SimpleTextSplitter, SimpleTextAppender, SimpleTextPrepender, IndexPicker
 from .nodes.lora_utils import LoRASelectorMulti
+from .nodes.image_outpaint_color import ImageOutpaintColorCanvas
 
 # 2. Add to Class Mappings
 NODE_CLASS_MAPPINGS = {
@@ -11,6 +12,7 @@ NODE_CLASS_MAPPINGS = {
     "SimpleTextPrepender": SimpleTextPrepender,
     "IndexPicker": IndexPicker,
     "LoRASelectorMulti": LoRASelectorMulti,
+    "ImageOutpaintColorCanvas": ImageOutpaintColorCanvas,
 }
 
 # 3. Add to Display Name Mappings
@@ -20,6 +22,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "SimpleTextPrepender": "String Prepender (Prefix)",
     "IndexPicker": "Index Picker",
     "LoRASelectorMulti": "LoRA Selector Multi-Output",
+    "ImageOutpaintColorCanvas": "Image Outpaint (Color Canvas)",
 }
 
 __all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']
