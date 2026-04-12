@@ -20,42 +20,59 @@ app.registerExtension({
             restoreFromWidgets(this._bboxState);
         };
 
-        // After execution, output index 1 is the clean source_image passthrough.
-        // Load it into the canvas as the background.
+        // After the graph runs, try to get the clean input image from the
+        // upstream node's cached preview first, then fall back to our own output.
         const onExecuted = nodeType.prototype.onExecuted;
         nodeType.prototype.onExecuted = function (output) {
             onExecuted?.apply(this, arguments);
-            const imgInfo = output?.images?.[1];
-            if (imgInfo && this._bboxState) {
-                const url = api.apiURL(
-                    `/view?filename=${encodeURIComponent(imgInfo.filename)}` +
-                    `&subfolder=${encodeURIComponent(imgInfo.subfolder ?? "")}` +
-                    `&type=${imgInfo.type ?? "temp"}`
-                );
-                loadBackground(this._bboxState, url);
-            }
+            if (!this._bboxState) return;
+
+            if (tryLoadFromUpstream(this._bboxState)) return;
+
+            // Fallback: use our own output images. Try index 1 (source_image
+            // passthrough) then index 0 (conditioned_image).
+            const imgs = output?.images;
+            if (!imgs?.length) return;
+            const info = imgs.length > 1 ? imgs[1] : imgs[0];
+            if (!info) return;
+
+            const qs = new URLSearchParams({
+                filename: info.filename,
+                subfolder: info.subfolder ?? "",
+                type: info.type ?? "temp",
+                t: Date.now(),   // cache-bust
+            });
+            loadBackground(this._bboxState, api.apiURL(`/view?${qs}`));
         };
 
-        // Restore drawn boxes when a saved workflow is loaded.
+        // When a node is reconnected after save/load, restore boxes and
+        // immediately try to pull the upstream preview.
         const onConfigure = nodeType.prototype.onConfigure;
-        nodeType.prototype.onConfigure = function (config) {
+        nodeType.prototype.onConfigure = function () {
             onConfigure?.apply(this, arguments);
-            if (this._bboxState) {
-                restoreFromWidgets(this._bboxState);
-                redraw(this._bboxState);
-            }
+            if (!this._bboxState) return;
+            restoreFromWidgets(this._bboxState);
+            redraw(this._bboxState);
+            // Small delay so the graph is fully wired before we query links.
+            setTimeout(() => tryLoadFromUpstream(this._bboxState), 200);
         };
 
-        // Clear the canvas background when the image input is disconnected.
+        // When the image input is connected, immediately try to show the
+        // upstream preview so the user doesn't have to run first.
         const onConnectionsChange = nodeType.prototype.onConnectionsChange;
         nodeType.prototype.onConnectionsChange = function (type, index, connected) {
             onConnectionsChange?.apply(this, arguments);
-            if (type === 1 /* INPUT */ && index === 0 && !connected && this._bboxState) {
-                this._bboxState.bgImage = null;
-                this._bboxState.imageW = 512;
-                this._bboxState.imageH = 512;
-                setStatus(this._bboxState, "Connect an image and run once to load the preview.");
-                redraw(this._bboxState);
+            if (!this._bboxState) return;
+            if (type === 1 /* INPUT */ && index === 0) {
+                if (connected) {
+                    setTimeout(() => tryLoadFromUpstream(this._bboxState), 150);
+                } else {
+                    this._bboxState.bgImage = null;
+                    this._bboxState.imageW = 512;
+                    this._bboxState.imageH = 512;
+                    setStatus(this._bboxState, "Connect an image and run once to load the preview.");
+                    redraw(this._bboxState);
+                }
             }
         };
     },
@@ -71,9 +88,9 @@ function createState(node) {
         bgImage: null,
         imageW: 512,
         imageH: 512,
-        sourceBox: null,    // { x1, y1, x2, y2 } in image-space pixels
+        sourceBox: null,
         targetBox: null,
-        mode: "source",     // "source" | "target"
+        mode: "source",
         dragging: false,
         dragStart: null,
         dragCurrent: null,
@@ -87,19 +104,17 @@ function createState(node) {
 function addCanvasWidget(state) {
     const { node } = state;
 
-    // Hide the raw INT coordinate widgets — the canvas replaces them visually.
-    // computeSize returning -4 collapses the widget row to nothing while keeping
-    // its value in the serialized graph so coordinates survive save/load.
+    // Collapse the raw INT coordinate widgets to zero height.
+    // They stay serialized (their values travel to Python) but are invisible.
     for (const name of COORD_NAMES) {
         const w = node.widgets?.find(w => w.name === name);
         if (w) w.computeSize = () => [0, -4];
     }
 
-    // ── Container ──
     const container = document.createElement("div");
     container.style.cssText = "display:flex;flex-direction:column;gap:4px;padding:4px 4px 2px;";
 
-    // ── Toolbar ──
+    // Toolbar
     const toolbar = document.createElement("div");
     toolbar.style.cssText = "display:flex;gap:6px;";
 
@@ -123,10 +138,19 @@ function addCanvasWidget(state) {
         redraw(state);
     };
 
+    // Manual refresh button as a safety fallback
+    const refreshBtn = document.createElement("button");
+    refreshBtn.textContent = "⟳";
+    refreshBtn.title = "Reload preview from upstream node";
+    refreshBtn.style.cssText =
+        "padding:4px 8px;background:#333;color:#eee;border:none;" +
+        "border-radius:4px;cursor:pointer;font-size:13px;";
+    refreshBtn.onclick = () => tryLoadFromUpstream(state);
+
     toolbar.appendChild(modeBtn);
     toolbar.appendChild(clearBtn);
+    toolbar.appendChild(refreshBtn);
 
-    // ── Canvas ──
     const canvas = document.createElement("canvas");
     canvas.width = 512;
     canvas.height = 512;
@@ -138,10 +162,9 @@ function addCanvasWidget(state) {
 
     attachMouseHandlers(state);
 
-    // ── Status line ──
     const statusEl = document.createElement("div");
     statusEl.style.cssText = "font-size:11px;color:#888;text-align:center;padding:2px 0;";
-    statusEl.textContent = "Connect an image and run once to load the preview.";
+    statusEl.textContent = "Connect an image. It will load automatically or click ⟳.";
     state.statusEl = statusEl;
 
     container.appendChild(toolbar);
@@ -152,9 +175,8 @@ function addCanvasWidget(state) {
         serialize: false,
         computeSize([width]) {
             const aspect = state.imageH / state.imageW;
-            const drawH = Math.round((width - 8) * aspect);
-            const clampedH = Math.min(Math.max(drawH, 120), 400);
-            return [width, clampedH + 52]; // +52 for toolbar + status
+            const h = Math.round((width - 8) * aspect);
+            return [width, Math.min(Math.max(h, 120), 400) + 52];
         },
     });
 
@@ -173,6 +195,51 @@ function applyModeStyle(btn, mode) {
             "flex:1;padding:4px 8px;background:#27ae60;color:#fff;" +
             "border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;";
     }
+}
+
+// ─── Upstream image loading ───────────────────────────────────────────────────
+
+// Pull the preview image directly from the node connected to input slot 0.
+// This works as soon as that node has been executed at least once — no need
+// to run our own node first.
+function tryLoadFromUpstream(state) {
+    const inputLink = state.node.inputs?.[0]?.link;
+    if (inputLink == null) return false;
+
+    const link = app.graph.links[inputLink];
+    if (!link) return false;
+
+    const upstream = app.graph.getNodeById(link.origin_id);
+    // origin_slot tells us which output of the upstream node is connected.
+    const img = upstream?.imgs?.[link.origin_slot ?? 0];
+
+    if (img instanceof HTMLImageElement && img.complete && img.naturalWidth > 0) {
+        applyBgImage(state, img);
+        return true;
+    }
+    return false;
+}
+
+function applyBgImage(state, img) {
+    state.bgImage = img;
+    state.imageW = img.naturalWidth;
+    state.imageH = img.naturalHeight;
+    state.canvas.width = img.naturalWidth;
+    state.canvas.height = img.naturalHeight;
+    setStatus(
+        state,
+        `${img.naturalWidth} × ${img.naturalHeight} px  —  ` +
+        `Red = source object, Green = destination`
+    );
+    state.node.setDirtyCanvas(true, true);
+    redraw(state);
+}
+
+function loadBackground(state, url) {
+    const img = new Image();
+    img.onload = () => applyBgImage(state, img);
+    img.onerror = () => setStatus(state, "Failed to load image preview. Try clicking ⟳.");
+    img.src = url;
 }
 
 // ─── Mouse handling ───────────────────────────────────────────────────────────
@@ -202,7 +269,6 @@ function attachMouseHandlers(state) {
         state.dragging = false;
         if (state.dragStart && state.dragCurrent) {
             const box = makeBox(state.dragStart, state.dragCurrent);
-            // Ignore tiny accidental clicks (< 4px in either dimension).
             if (box.x2 - box.x1 >= 4 && box.y2 - box.y1 >= 4) {
                 if (state.mode === "source") state.sourceBox = box;
                 else state.targetBox = box;
@@ -219,20 +285,16 @@ function attachMouseHandlers(state) {
 
 function toImageCoords(state, e) {
     const rect = state.canvas.getBoundingClientRect();
-    const sx = state.imageW / rect.width;
-    const sy = state.imageH / rect.height;
     return {
-        x: Math.round((e.clientX - rect.left) * sx),
-        y: Math.round((e.clientY - rect.top) * sy),
+        x: Math.round((e.clientX - rect.left) * (state.imageW / rect.width)),
+        y: Math.round((e.clientY - rect.top) * (state.imageH / rect.height)),
     };
 }
 
 function makeBox(a, b) {
     return {
-        x1: Math.min(a.x, b.x),
-        y1: Math.min(a.y, b.y),
-        x2: Math.max(a.x, b.x),
-        y2: Math.max(a.y, b.y),
+        x1: Math.min(a.x, b.x), y1: Math.min(a.y, b.y),
+        x2: Math.max(a.x, b.x), y2: Math.max(a.y, b.y),
     };
 }
 
@@ -250,7 +312,7 @@ function redraw(state) {
         ctx.fillStyle = "#555";
         ctx.font = `${Math.max(12, Math.round(imageW * 0.028))}px sans-serif`;
         ctx.textAlign = "center";
-        ctx.fillText("Run graph once to load image preview", imageW / 2, imageH / 2);
+        ctx.fillText("Connect an image. Click ⟳ or run the graph to load preview.", imageW / 2, imageH / 2);
     }
 
     if (sourceBox) strokeBox(ctx, sourceBox, "rgba(255,60,60,1)", 3);
@@ -260,8 +322,7 @@ function redraw(state) {
 function drawLiveBox(state) {
     if (!state.dragStart || !state.dragCurrent) return;
     const box = makeBox(state.dragStart, state.dragCurrent);
-    const color = state.mode === "source" ? "rgba(255,60,60,0.75)" : "rgba(60,255,60,0.75)";
-    strokeBox(state.ctx, box, color, 2);
+    strokeBox(state.ctx, box, state.mode === "source" ? "rgba(255,60,60,0.75)" : "rgba(60,255,60,0.75)", 2);
 }
 
 function strokeBox(ctx, box, color, lw) {
@@ -275,51 +336,34 @@ function strokeBox(ctx, box, color, lw) {
 // ─── Widget sync ──────────────────────────────────────────────────────────────
 
 function syncWidgets(state) {
-    setW(state.node, "source_x1", state.sourceBox?.x1 ?? 0);
-    setW(state.node, "source_y1", state.sourceBox?.y1 ?? 0);
-    setW(state.node, "source_x2", state.sourceBox?.x2 ?? 0);
-    setW(state.node, "source_y2", state.sourceBox?.y2 ?? 0);
-    setW(state.node, "target_x1", state.targetBox?.x1 ?? 0);
-    setW(state.node, "target_y1", state.targetBox?.y1 ?? 0);
-    setW(state.node, "target_x2", state.targetBox?.x2 ?? 0);
-    setW(state.node, "target_y2", state.targetBox?.y2 ?? 0);
-}
-
-function setW(node, name, value) {
-    const w = node.widgets?.find(w => w.name === name);
-    if (w) w.value = value;
+    const { node, sourceBox, targetBox } = state;
+    const values = {
+        source_x1: sourceBox?.x1 ?? 0,
+        source_y1: sourceBox?.y1 ?? 0,
+        source_x2: sourceBox?.x2 ?? 0,
+        source_y2: sourceBox?.y2 ?? 0,
+        target_x1: targetBox?.x1 ?? 0,
+        target_y1: targetBox?.y1 ?? 0,
+        target_x2: targetBox?.x2 ?? 0,
+        target_y2: targetBox?.y2 ?? 0,
+    };
+    for (const [name, value] of Object.entries(values)) {
+        const w = node.widgets?.find(w => w.name === name);
+        if (w) {
+            w.value = value;
+            w.callback?.(value); // trigger any ComfyUI update hooks
+        }
+    }
+    // Mark the graph dirty so ComfyUI knows values have changed.
+    app.graph.setDirtyCanvas(true);
 }
 
 function restoreFromWidgets(state) {
     const get = name => state.node.widgets?.find(w => w.name === name)?.value ?? 0;
-    const sx1 = get("source_x1"), sy1 = get("source_y1");
-    const sx2 = get("source_x2"), sy2 = get("source_y2");
-    const tx1 = get("target_x1"), ty1 = get("target_y1");
-    const tx2 = get("target_x2"), ty2 = get("target_y2");
+    const [sx1, sy1, sx2, sy2] = ["source_x1", "source_y1", "source_x2", "source_y2"].map(get);
+    const [tx1, ty1, tx2, ty2] = ["target_x1", "target_y1", "target_x2", "target_y2"].map(get);
     if (sx2 > sx1 && sy2 > sy1) state.sourceBox = { x1: sx1, y1: sy1, x2: sx2, y2: sy2 };
     if (tx2 > tx1 && ty2 > ty1) state.targetBox = { x1: tx1, y1: ty1, x2: tx2, y2: ty2 };
-}
-
-// ─── Background image loading ─────────────────────────────────────────────────
-
-function loadBackground(state, url) {
-    const img = new Image();
-    img.onload = () => {
-        state.bgImage = img;
-        state.imageW = img.naturalWidth;
-        state.imageH = img.naturalHeight;
-        state.canvas.width = img.naturalWidth;
-        state.canvas.height = img.naturalHeight;
-        setStatus(
-            state,
-            `${img.naturalWidth} × ${img.naturalHeight} px  —  ` +
-            `draw red source box, then green target box`
-        );
-        state.node.setDirtyCanvas(true, true);
-        redraw(state);
-    };
-    img.onerror = () => setStatus(state, "Failed to load image preview.");
-    img.src = url;
 }
 
 function setStatus(state, text) {

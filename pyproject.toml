@@ -1,7 +1,7 @@
 [project]
 name = "lzits-nodes"
 description = "ComfyUI custom nodes for text/string manipulation, LoRA selection, image outpainting, YOLO object detection, and interactive bounding box drawing for object-move workflows."
-version = "1.1.0"
+version = "1.1.1"
 license = { file = "LICENSE" }
 dependencies = ["ultralytics"]
 
