@@ -1,9 +1,9 @@
 [project]
 name = "lzits-nodes"
-description = "ComfyUI custom nodes for text/string manipulation including splitting strings into batches, appending/prepending text, picking items from lists by index, and multi-output LoRA selection."
-version = "1.0.19"
+description = "ComfyUI custom nodes for text/string manipulation, LoRA selection, image outpainting, YOLO object detection, and interactive bounding box drawing for object-move workflows."
+version = "1.1.0"
 license = { file = "LICENSE" }
-dependencies = []
+dependencies = ["ultralytics"]
 
 [project.urls]
 Repository = "https://github.com/lzitser23/lzits-nodes"  

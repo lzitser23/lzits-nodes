@@ -4,6 +4,11 @@
 from .nodes.text_utils import SimpleTextSplitter, SimpleTextAppender, SimpleTextPrepender, IndexPicker
 from .nodes.lora_utils import LoRASelectorMulti
 from .nodes.image_outpaint_color import ImageOutpaintColorCanvas
+from .nodes.draw_bounding_box import DrawBoundingBox
+from .nodes.yolo_detect import YOLODetectDraw
+from .nodes.yolo_get_boxes import YOLOGetBoxes, ObjectSelector
+from .nodes.prepare_object_move import PrepareObjectMove
+from .nodes.bbox_draw_widget import BBoxDrawWidget
 
 # 2. Add to Class Mappings
 NODE_CLASS_MAPPINGS = {
@@ -13,6 +18,12 @@ NODE_CLASS_MAPPINGS = {
     "IndexPicker": IndexPicker,
     "LoRASelectorMulti": LoRASelectorMulti,
     "ImageOutpaintColorCanvas": ImageOutpaintColorCanvas,
+    "DrawBoundingBox": DrawBoundingBox,
+    "YOLODetectDraw": YOLODetectDraw,
+    "YOLOGetBoxes": YOLOGetBoxes,
+    "ObjectSelector": ObjectSelector,
+    "PrepareObjectMove": PrepareObjectMove,
+    "BBoxDrawWidget": BBoxDrawWidget,
 }
 
 # 3. Add to Display Name Mappings
@@ -23,6 +34,14 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "IndexPicker": "Index Picker",
     "LoRASelectorMulti": "LoRA Selector Multi-Output",
     "ImageOutpaintColorCanvas": "Image Outpaint (Color Canvas)",
+    "DrawBoundingBox": "Draw Bounding Box",
+    "YOLODetectDraw": "YOLO Detect & Draw",
+    "YOLOGetBoxes": "YOLO Get Boxes",
+    "ObjectSelector": "Object Selector",
+    "PrepareObjectMove": "Prepare Object Move",
+    "BBoxDrawWidget": "Bounding Box Draw",
 }
+
+WEB_DIRECTORY = "./web"
 
 __all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']
